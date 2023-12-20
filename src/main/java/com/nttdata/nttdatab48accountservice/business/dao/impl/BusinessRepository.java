@@ -1,11 +1,14 @@
 package com.nttdata.nttdatab48accountservice.business.dao.impl;
 
+import com.netflix.appinfo.InstanceInfo;
+import com.netflix.discovery.EurekaClient;
 import com.nttdata.nttdatab48accountservice.business.dao.IBusinessRepository;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -19,18 +22,29 @@ import org.springframework.web.client.RestTemplate;
 @Component
 public class BusinessRepository implements IBusinessRepository {
 
-    RestTemplate restTemplate;
+    @Autowired
+    private EurekaClient discoveryClient;
+
+    public String serviceUrl() {
+        InstanceInfo instance = discoveryClient.getNextServerFromEureka("CLIENT-SERVICE", false);
+        return instance.getHomePageUrl();
+    }
+
+
+    RestTemplate restTemplate = new RestTemplate();
 
     @Override
     public Observable findClientByDni(String dni) {
-        System.out.println("********** dni   " + dni);
-        String url = "http://localhost:8083/api/v1/clients/find/" + dni;
+
+        String url = this.serviceUrl() +"/api/v1/clients/find/" + dni;
         String json = new String();
         return Observable.fromCallable(() -> callExternalUrl(url, json, HttpMethod.GET))
                 .subscribeOn(Schedulers.io())
+                .doOnError( e -> {
+                    System.out.println("error *****  " + e );
+                })
                 .flatMap(re -> {
                             if (re.hasBody()) {
-                                System.out.println("re.hasBody()  " + re.hasBody());
                                 return Observable.just(re.getBody());
                             } else {
                                 System.out.println("en else");
